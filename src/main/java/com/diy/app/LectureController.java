@@ -1,6 +1,8 @@
 package com.diy.app;
 
-import com.diy.framework.web.mvc.Controller;
+import com.diy.framework.web.mvc.annotation.Controller;
+import com.diy.framework.web.mvc.annotation.RequestMapping;
+import com.diy.framework.web.mvc.annotation.RequestMethod;
 import com.diy.framework.web.mvc.view.ModelAndView;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -12,7 +14,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
-public class LectureController implements Controller {
+@Controller
+@RequestMapping("/lectures")
+public class LectureController {
 
     private final LectureService lectureService;
 
@@ -21,31 +25,20 @@ public class LectureController implements Controller {
         System.out.println("lectureController::lectureService = " + lectureService);
     }
 
-    @Override
-    public ModelAndView handleRequest(final HttpServletRequest request, final HttpServletResponse response) throws Exception {
-        if ("POST".equals(request.getMethod())) {
-            return doPost(request, response);
-        } else if ("GET".equals(request.getMethod())) {
-            return doGet(request, response);
-        }
-
-        throw new RuntimeException("404 Not Found");
+    @RequestMapping(methods = RequestMethod.GET)
+    public ModelAndView list(final HttpServletRequest req, final HttpServletResponse resp) throws Exception {
+        final Map<String, Object> model = new HashMap<>();
+        model.put("lectures", lectureService.getLectures());
+        return new ModelAndView("lecture-list", model);
     }
 
-    private ModelAndView doPost(final HttpServletRequest req, final HttpServletResponse resp) throws ServletException, IOException {
+    @RequestMapping(methods = RequestMethod.POST)
+    public ModelAndView create(final HttpServletRequest req, final HttpServletResponse resp) throws ServletException, IOException {
         final byte[] bodyBytes = req.getInputStream().readAllBytes();
         final String body = new String(bodyBytes, StandardCharsets.UTF_8);
-
-
         final Lecture lecture = new ObjectMapper().readValue(body, Lecture.class);
+        lectureService.registerLecture(lecture);
 
         return new ModelAndView("redirect:/lectures");
-    }
-
-    private ModelAndView doGet(final HttpServletRequest req, final HttpServletResponse resp) throws Exception {
-        final Map<String, Object> model = new HashMap<>();
-//        model.put("lectures", lectureModels);
-
-        return new ModelAndView("lecture-list", model);
     }
 }

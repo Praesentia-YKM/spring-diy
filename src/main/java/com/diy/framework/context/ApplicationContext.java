@@ -6,6 +6,7 @@ import com.diy.framework.beans.factory.BeanScanner;
 import com.diy.framework.beans.factory.ConfigurationClassBeanDefinition;
 import com.diy.framework.context.annotation.Bean;
 import com.diy.framework.context.annotation.Component;
+import com.diy.framework.web.mvc.annotation.Controller;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
@@ -13,9 +14,12 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class ApplicationContext {
 
@@ -29,7 +33,12 @@ public class ApplicationContext {
 
     public void initialize() {
         final BeanScanner beanScanner = new BeanScanner(basePackage);
-        beanScanner.scanClassesTypeAnnotatedWith(Component.class).forEach(this::registerBean);
+
+        //  Reflections이 Controller 커스텀 어노테이션에 기술된 @Component를 스캔하지 못해서 명시적으로 스캔처리 함
+        final Set<Class<?>> beanClasses = new LinkedHashSet<>();
+        beanClasses.addAll(beanScanner.scanClassesTypeAnnotatedWith(Component.class));
+        beanClasses.addAll(beanScanner.scanClassesTypeAnnotatedWith(Controller.class));
+        beanClasses.forEach(this::registerBean);
 
         beanDefinitionRegistry.forEach(beanDefinition -> {
             final String beanName = beanDefinition.getBeanName();
@@ -40,6 +49,11 @@ public class ApplicationContext {
 
             createInstance(beanDefinition);
         });
+    }
+
+    // 디스패처서블릿이 컨테이너의 빈을 (이름→인스턴스) 통째로 가져갈 수 있게 노출시킴
+    public Map<String, Object> getBeans() {
+        return Collections.unmodifiableMap(beans);
     }
 
     private void registerBean(final Class<?> beanClass) {
