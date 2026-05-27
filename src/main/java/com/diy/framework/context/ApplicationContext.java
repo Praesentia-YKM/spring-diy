@@ -11,6 +11,9 @@ import com.diy.framework.web.method.HandlerMethod;
 import com.diy.framework.web.method.RequestMappingInfo;
 import com.diy.framework.web.method.RequestMethodsRequestCondition;
 import com.diy.framework.web.mvc.anotation.RequestMapping;
+import com.diy.framework.web.servlet.BeanNameUrlHandlerMapping;
+import com.diy.framework.web.servlet.HandlerMapping;
+import com.diy.framework.web.servlet.RequestMappingHandlerMapping;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
@@ -24,7 +27,9 @@ import java.util.Map;
 
 public class ApplicationContext {
 
-    public static final Map<RequestMappingInfo, Object> handlerMapping = new HashMap<>();
+    private static final BeanNameUrlHandlerMapping beanNameUrlHandlerMapping = new BeanNameUrlHandlerMapping();
+    private static final RequestMappingHandlerMapping requestMappingHandlerMapping = new RequestMappingHandlerMapping();
+    public static final List<HandlerMapping> handlerMappings = List.of(beanNameUrlHandlerMapping, requestMappingHandlerMapping);
 
     private final String basePackage;
     private final List<BeanDefinition> beanDefinitionRegistry = new ArrayList<>();
@@ -71,7 +76,7 @@ public class ApplicationContext {
                 final Object bean = autowireConstructor((Constructor<?>) factoryMethod, arguments);
                 saveBean(beanDefinition.getBeanName(), bean);
 
-                extractHandlerMethod(beanDefinition, bean);
+                registerRequestMappingHandlers(beanDefinition, bean);
 
                 return bean;
             }
@@ -79,7 +84,7 @@ public class ApplicationContext {
             final Object bean = instantiateUsingFactoryMethod(beanDefinition, arguments);
             saveBean(beanDefinition.getBeanName(), bean);
 
-            extractController(beanDefinition, bean);
+            registerBeanNameUrlHandler(beanDefinition, bean);
 
             return bean;
         } catch (Exception e) {
@@ -89,7 +94,7 @@ public class ApplicationContext {
         }
     }
 
-    private void extractHandlerMethod(final BeanDefinition beanDefinition, final Object bean) {
+    private void registerRequestMappingHandlers(final BeanDefinition beanDefinition, final Object bean) {
         if (beanDefinition.getBeanClass().isAnnotationPresent(Controller.class)) {
             final Class<?> controllerClass = beanDefinition.getBeanClass();
             Arrays.stream(controllerClass.getDeclaredMethods())
@@ -100,15 +105,14 @@ public class ApplicationContext {
                         final RequestMappingInfo mappingInfo = new RequestMappingInfo(mapping.value(), new RequestMethodsRequestCondition(mapping.methods()));
                         final HandlerMethod handlerMethod = new HandlerMethod(bean, method);
 
-                        handlerMapping.put(mappingInfo, handlerMethod);
+                        requestMappingHandlerMapping.register(mappingInfo, handlerMethod);
                     });
         }
     }
 
-    private void extractController(final BeanDefinition beanDefinition, final Object bean) {
+    private void registerBeanNameUrlHandler(final BeanDefinition beanDefinition, final Object bean) {
         if (Arrays.stream(beanDefinition.getBeanClass().getGenericInterfaces()).toList().contains(com.diy.framework.web.mvc.Controller.class)) {
-            final RequestMappingInfo mappingInfo = new RequestMappingInfo(beanDefinition.getBeanName(), new RequestMethodsRequestCondition());
-            handlerMapping.put(mappingInfo, bean);
+            beanNameUrlHandlerMapping.register(beanDefinition.getBeanName(), bean);
         }
     }
 

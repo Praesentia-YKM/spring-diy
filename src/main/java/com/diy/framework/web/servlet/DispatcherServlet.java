@@ -1,10 +1,6 @@
 package com.diy.framework.web.servlet;
 
 import com.diy.framework.context.ApplicationContext;
-import com.diy.framework.web.method.HandlerMethod;
-import com.diy.framework.web.method.RequestMappingInfo;
-import com.diy.framework.web.mvc.Controller;
-import com.diy.framework.web.mvc.anotation.RequestMethod;
 import com.diy.framework.web.mvc.view.JspViewResolver;
 import com.diy.framework.web.mvc.view.ModelAndView;
 import com.diy.framework.web.mvc.view.UrlBasedViewResolver;
@@ -26,58 +22,55 @@ import java.util.Map;
 
 public class DispatcherServlet extends HttpServlet {
 
+    private final List<HandlerMapping> handlerMappings = ApplicationContext.handlerMappings;
+    private final List<HandlerAdapter> handlerAdapters = new ArrayList<>();
     private final List<ViewResolver> viewResolvers = new ArrayList<>();
 
     public DispatcherServlet() {
+        this.handlerAdapters.add(new SimpleControllerHandlerAdapter());
+        this.handlerAdapters.add(new HandlerMethodHandlerAdapter());
+
         this.viewResolvers.add(new UrlBasedViewResolver());
         this.viewResolvers.add(new JspViewResolver());
     }
 
     @Override
     protected void service(final HttpServletRequest req, final HttpServletResponse resp) throws ServletException, IOException {
-        final String uri = req.getRequestURI();
-        final String method = req.getMethod().toUpperCase();
-
-        final RequestMethod requestMethod = RequestMethod.valueOf(method);
-
-        final Object handler = getHandler(uri, requestMethod);
+        final Object handler = getHandler(req);
 
         if (handler == null) {
             return;
         }
 
         try {
-            if (handler instanceof HandlerMethod handlerMethod) {
-                final ModelAndView mav = handlerMethod.handle(req, resp);
-                render(mav, req, resp);
-
-                return;
-            }
-
-            if (handler instanceof Controller controller) {
-                final ModelAndView mav = controller.handleRequest(req, resp);
-                render(mav, req, resp);
-
-                return;
-            }
-
-            throw new RuntimeException("not support request");
-        } catch (Exception e) {
+            final HandlerAdapter handlerAdapter = getHandlerAdapter(handler);
+            final ModelAndView mav = handlerAdapter.handle(req, resp, handler);
+            render(mav, req, resp);
+        } catch (final Exception e) {
             throw new RuntimeException(e);
         }
     }
 
     @Nullable
-    private Object getHandler(final String uri, final RequestMethod requestMethod) {
-        final Map<RequestMappingInfo, Object> handlerMapping = ApplicationContext.handlerMapping;
-
-        for (RequestMappingInfo mapping : handlerMapping.keySet()) {
-            if (mapping.isMatch(uri, requestMethod)) {
-                return handlerMapping.get(mapping);
+    private Object getHandler(final HttpServletRequest req) {
+        for (final HandlerMapping handlerMapping : this.handlerMappings) {
+            final Object handler = handlerMapping.getHandler(req);
+            if (handler != null) {
+                return handler;
             }
         }
 
         return null;
+    }
+
+    private HandlerAdapter getHandlerAdapter(final Object handler) {
+        for (final HandlerAdapter handlerAdapter : this.handlerAdapters) {
+            if (handlerAdapter.supports(handler)) {
+                return handlerAdapter;
+            }
+        }
+
+        throw new RuntimeException("No adapter for handler: " + handler);
     }
 
     private void render(final ModelAndView mav, final HttpServletRequest req, final HttpServletResponse resp) throws Exception {
